@@ -311,7 +311,8 @@ async function loadPlaylists() {
   items.forEach((pl) => {
     const div = document.createElement("div");
     div.className = "playlist-item";
-    div.textContent = `${pl.name} (${pl.tracks.total}曲)`;
+    const count = pl.tracks?.total ?? pl.items?.total;
+    div.textContent = count != null ? `${pl.name} (${count}曲)` : pl.name;
     div.onclick = () => selectPlaylist(pl, div);
     listEl.appendChild(div);
   });
@@ -359,12 +360,13 @@ async function startQuiz() {
   showScreen("quiz-screen");
   document.getElementById("quiz-status").textContent = "曲を読み込み中...";
   trackPool = [];
-  let url = `/playlists/${selectedPlaylist.id}/tracks?limit=100&fields=items(track(uri,name,artists(name))),next`;
+  let url = `/playlists/${selectedPlaylist.id}/items?limit=100&fields=items(item(uri,name,artists(name))),next`;
   while (url) {
     const res = await spotifyFetch(url.replace("https://api.spotify.com/v1", ""));
     const data = await res.json();
-    (data.items || []).forEach((item) => {
-      if (item.track && item.track.uri) trackPool.push(item.track);
+    (data.items || []).forEach((entry) => {
+      const track = entry.item || entry.track;
+      if (track && track.uri) trackPool.push(track);
     });
     url = data.next;
   }
