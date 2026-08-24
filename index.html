@@ -129,6 +129,10 @@
 <!-- STEP 3: Quiz -->
 <div class="card hidden" id="quiz-screen">
   <div class="score" id="score-display">出題数: 0</div>
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+    <input type="checkbox" id="auto-mode-toggle">
+    オートモード（答え表示後3秒で自動的に次へ）
+  </label>
   <label>再生する長さ</label>
   <div class="duration-row">
     <button data-sec="3" class="active">3秒</button>
@@ -282,6 +286,7 @@ let currentTrack = null;
 let quizCount = 0;
 let selectedDuration = 3;
 let pauseTimer = null;
+let autoNextTimer = null;
 
 function showScreen(id) {
   ["setup-screen", "playlist-screen", "device-screen", "quiz-screen"].forEach((s) => {
@@ -428,7 +433,7 @@ async function playClip(track) {
   }
 }
 
-document.getElementById("play-btn").onclick = async () => {
+async function playNextTrack() {
   const remaining = trackPool.filter((t) => !usedTrackUris.has(t.uri));
   if (remaining.length === 0) {
     document.getElementById("quiz-status").textContent = "全曲出題し終わりました！お疲れ様でした 🎉";
@@ -449,7 +454,9 @@ document.getElementById("play-btn").onclick = async () => {
 
   await playClip(currentTrack);
   document.getElementById("quiz-status").textContent = "この曲、何でしょう？🤔";
-};
+}
+
+document.getElementById("play-btn").onclick = playNextTrack;
 
 document.getElementById("replay-btn").onclick = async () => {
   if (currentTrack) await playClip(currentTrack);
@@ -464,17 +471,22 @@ document.getElementById("reveal-btn").onclick = () => {
   document.getElementById("reveal-btn").classList.add("hidden");
   document.getElementById("replay-btn").classList.add("hidden");
   document.getElementById("next-btn").classList.remove("hidden");
+
+  clearTimeout(autoNextTimer);
+  if (document.getElementById("auto-mode-toggle").checked) {
+    autoNextTimer = setTimeout(goToNextQuestion, 3000);
+  }
 };
 
-document.getElementById("next-btn").onclick = async () => {
+async function goToNextQuestion() {
+  clearTimeout(autoNextTimer);
   clearTimeout(pauseTimer);
   await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
-  document.getElementById("play-btn").classList.remove("hidden");
   document.getElementById("next-btn").classList.add("hidden");
-  document.getElementById("answer-title").classList.add("hidden");
-  document.getElementById("answer-artist").classList.add("hidden");
-  document.getElementById("quiz-status").textContent = "「出題」を押してください";
-};
+  await playNextTrack();
+}
+
+document.getElementById("next-btn").onclick = goToNextQuestion;
 
 // ---------- Init ----------
 document.getElementById("login-btn").onclick = startLogin;
