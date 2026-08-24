@@ -147,6 +147,7 @@
   <button class="btn-outline hidden" id="reveal-btn">答えを表示</button>
   <button class="btn-secondary hidden" id="next-btn">次の曲へ</button>
 </div>
+<div class="footer-link"><a href="#" id="logout-link" style="color:inherit;">ログアウトして再ログイン（権限エラーが出る場合）</a></div>
 
 <script>
 // ---------- Config ----------
@@ -317,6 +318,8 @@ async function loadPlaylists() {
       items = items.concat(data.items || []);
       url = data.next;
     }
+    // Spotify生成のアルゴリズムプレイリスト(Discover Weeklyなど)はAPI経由の曲取得が403になるため除外
+    items = items.filter((pl) => pl.owner?.id !== "spotify");
     listEl.innerHTML = "";
     if (items.length === 0) {
       listEl.innerHTML = "プレイリストが見つかりませんでした（0件）。Spotifyアプリ側にプレイリストがあるか確認してください。";
@@ -398,7 +401,10 @@ async function startQuiz() {
       url = data.next;
     }
   } catch (e) {
-    document.getElementById("quiz-status").textContent = `曲の読み込みに失敗しました: ${e.message}`;
+    const hint = e.message.includes("403")
+      ? " (このプレイリストへのアクセスが拒否されました。他人の非公開プレイリストか、アクセス権限のないプレイリストの可能性があります。別のプレイリストを試すか、一度ログアウトして再ログインしてください)"
+      : "";
+    document.getElementById("quiz-status").textContent = `曲の読み込みに失敗しました: ${e.message}${hint}`;
     return;
   }
   usedTrackUris = new Set();
@@ -490,6 +496,11 @@ document.getElementById("next-btn").onclick = goToNextQuestion;
 
 // ---------- Init ----------
 document.getElementById("login-btn").onclick = startLogin;
+document.getElementById("logout-link").onclick = (e) => {
+  e.preventDefault();
+  ["access_token", "refresh_token", "expires_at", "pkce_verifier"].forEach((k) => store.del(k));
+  window.location.href = REDIRECT_URI;
+};
 
 (async function init() {
   const savedClientId = store.get("spotify_client_id");
