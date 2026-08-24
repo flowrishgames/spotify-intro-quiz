@@ -131,7 +131,7 @@
   <div class="score" id="score-display">出題数: 0</div>
   <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
     <input type="checkbox" id="auto-mode-toggle">
-    オートモード（10秒再生→曲名表示→3秒後に次の曲）
+    オートモード（30秒再生→曲名表示→3秒後に次の曲）
   </label>
   <label>再生する長さ</label>
   <div class="duration-row">
@@ -434,7 +434,7 @@ async function playClip(track) {
     body: JSON.stringify({ uris: [track.uri], position_ms: 0 }),
   });
   const isAuto = document.getElementById("auto-mode-toggle").checked;
-  const duration = isAuto ? 10 : selectedDuration;
+  const duration = isAuto ? 30 : selectedDuration;
   if (duration > 0) {
     pauseTimer = setTimeout(async () => {
       await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
