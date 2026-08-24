@@ -343,6 +343,11 @@ async function loadDevices() {
   const listEl = document.getElementById("device-list");
   listEl.innerHTML = "読み込み中...";
   const res = await spotifyFetch("/me/player/devices");
+  if (!res.ok) {
+    const errBody = await res.text();
+    listEl.innerHTML = `<div class="error">読み込みに失敗しました:<br>${res.status} ${errBody}</div>`;
+    return;
+  }
   const data = await res.json();
   listEl.innerHTML = "";
   if (!data.devices || data.devices.length === 0) {
@@ -372,15 +377,24 @@ async function startQuiz() {
   showScreen("quiz-screen");
   document.getElementById("quiz-status").textContent = "曲を読み込み中...";
   trackPool = [];
-  let url = `/playlists/${selectedPlaylist.id}/items?limit=100&fields=items(item(uri,name,artists(name))),next`;
-  while (url) {
-    const res = await spotifyFetch(url.replace("https://api.spotify.com/v1", ""));
-    const data = await res.json();
-    (data.items || []).forEach((entry) => {
-      const track = entry.item || entry.track;
-      if (track && track.uri) trackPool.push(track);
-    });
-    url = data.next;
+  let url = `/playlists/${selectedPlaylist.id}/tracks?limit=100&fields=items(is_local,item(uri,name,artists(name))),next`;
+  try {
+    while (url) {
+      const res = await spotifyFetch(url.replace("https://api.spotify.com/v1", ""));
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`APIエラー (${res.status}): ${errBody}`);
+      }
+      const data = await res.json();
+      (data.items || []).forEach((entry) => {
+        const track = entry.item || entry.track;
+        if (track && track.uri && !entry.is_local) trackPool.push(track);
+      });
+      url = data.next;
+    }
+  } catch (e) {
+    document.getElementById("quiz-status").textContent = `曲の読み込みに失敗しました: ${e.message}`;
+    return;
   }
   usedTrackUris = new Set();
   quizCount = 0;
@@ -453,6 +467,8 @@ document.getElementById("reveal-btn").onclick = () => {
 document.getElementById("next-btn").onclick = () => {
   document.getElementById("play-btn").classList.remove("hidden");
   document.getElementById("next-btn").classList.add("hidden");
+  document.getElementById("answer-title").classList.add("hidden");
+  document.getElementById("answer-artist").classList.add("hidden");
   document.getElementById("quiz-status").textContent = "「出題」を押してください";
 };
 
