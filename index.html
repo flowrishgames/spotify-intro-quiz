@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>イントロクイズ (Spotify)</title>
+<style>
+  :root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --accent: #1DB954;
+    --text: #f5f5f5;
+    --sub: #a0a0a0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 60px;
+  }
+  h1 { font-size: 1.4rem; margin: 12px 0 4px; }
+  .sub { color: var(--sub); font-size: 0.85rem; margin-bottom: 20px; text-align: center; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 0.85rem; color: var(--sub); margin-bottom: 6px; }
+  input[type="text"], select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    background: #0f0f0f;
+    color: var(--text);
+    font-size: 1rem;
+    margin-bottom: 14px;
+  }
+  button {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 10px;
+    transition: opacity 0.15s;
+  }
+  button:active { opacity: 0.7; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-secondary { background: #333; color: var(--text); }
+  .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .hidden { display: none !important; }
+  .playlist-item, .device-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px;
+    background: #0f0f0f;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  .playlist-item.selected, .device-item.selected {
+    border: 2px solid var(--accent);
+  }
+  .quiz-status {
+    text-align: center;
+    font-size: 1.1rem;
+    margin: 20px 0;
+    min-height: 60px;
+  }
+  .answer {
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 10px 0;
+  }
+  .answer-sub { text-align: center; color: var(--sub); margin-bottom: 10px; }
+  .duration-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .duration-row button { flex: 1; margin-bottom: 0; padding: 10px; font-size: 0.9rem; }
+  .duration-row button.active { background: var(--accent); color: #000; }
+  .error { color: #ff6b6b; font-size: 0.85rem; margin-bottom: 10px; text-align: center; }
+  .score { text-align: center; color: var(--sub); font-size: 0.85rem; margin-bottom: 10px; }
+  .footer-link { color: var(--sub); font-size: 0.8rem; text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<h1>🎵 イントロクイズ</h1>
+<div class="sub">Spotifyでプレイリストからランダム出題</div>
+
+<!-- STEP 0: Setup -->
+<div class="card" id="setup-screen">
+  <label for="client-id">Spotify Client ID</label>
+  <input type="text" id="client-id" placeholder="Developer Dashboardで取得したClient ID">
+  <div class="error hidden" id="setup-error"></div>
+  <button class="btn-primary" id="login-btn">Spotifyでログイン</button>
+  <div class="footer-link">初回のみ設定。次回以降は自動でログインします。</div>
+</div>
+
+<!-- STEP 1: Select playlist -->
+<div class="card hidden" id="playlist-screen">
+  <label>出題するプレイリストを選択</label>
+  <div id="playlist-list"></div>
+  <button class="btn-secondary hidden" id="playlist-loading">読み込み中...</button>
+</div>
+
+<!-- STEP 2: Select device -->
+<div class="card hidden" id="device-screen">
+  <label>再生するデバイスを選択（車内のスマホでSpotifyアプリを開いておいてください）</label>
+  <div id="device-list"></div>
+  <button class="btn-outline" id="refresh-devices-btn">デバイス一覧を更新</button>
+</div>
+
+<!-- STEP 3: Quiz -->
+<div class="card hidden" id="quiz-screen">
+  <div class="score" id="score-display">出題数: 0</div>
+  <label>再生する長さ</label>
+  <div class="duration-row">
+    <button data-sec="3">3秒</button>
+    <button data-sec="5" class="active">5秒</button>
+    <button data-sec="10">10秒</button>
+  </div>
+  <div class="quiz-status" id="quiz-status">「出題」を押してスタート</div>
+  <div class="answer hidden" id="answer-title"></div>
+  <div class="answer-sub hidden" id="answer-artist"></div>
+  <button class="btn-primary" id="play-btn">出題</button>
+  <button class="btn-secondary hidden" id="replay-btn">もう一度再生</button>
+  <button class="btn-outline hidden" id="reveal-btn">答えを表示</button>
+  <button class="btn-secondary hidden" id="next-btn">次の曲へ</button>
+</div>
+
+<script>
+// ---------- Config ----------
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+const SCOPES = [
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "playlist-read-private",
+  "playlist-read-collaborative"
+].join(" ");
+
+// ---------- Storage helpers ----------
+const store = {
+  get: (k) => localStorage.getItem(k),
+  set: (k, v) => localStorage.setItem(k, v),
+  del: (k) => localStorage.removeItem(k),
+};
+
+// ---------- PKCE helpers ----------
+function randomString(len) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < len; i++) out += chars[arr[i] % chars.length];
+  return out;
+}
+async function sha256(input) {
+  const data = new TextEncoder().encode(input);
+  return crypto.subtle.digest("SHA-256", data);
+}
+function base64UrlEncode(buffer) {
+  let str = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  return str.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// ---------- Auth flow ----------
+async function startLogin() {
+  const clientId = document.getElementById("client-id").value.trim();
+  if (!clientId) {
+    showSetupError("Client IDを入力してください");
+    return;
+  }
+  store.set("spotify_client_id", clientId);
+
+  const verifier = randomString(64);
+  store.set("pkce_verifier", verifier);
+  const challenge = base64UrlEncode(await sha256(verifier));
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPES,
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+  });
+  window.location.href = "https://accounts.spotify.com/authorize?" + params.toString();
+}
+
+async function exchangeCodeForToken(code) {
+  const clientId = store.get("spotify_client_id");
+  const verifier = store.get("pkce_verifier");
+  const body = new URLSearchParams({
+    client_id: clientId,
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: REDIRECT_URI,
+    code_verifier: verifier,
+  });
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) throw new Error("トークン取得に失敗しました");
+  const data = await res.json();
+  saveTokens(data);
+}
+
+async function refreshAccessToken() {
+  const clientId = store.get("spotify_client_id");
+  const refreshToken = store.get("refresh_token");
+  const body = new URLSearchParams({
+    client_id: clientId,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) throw new Error("再ログインが必要です");
+  const data = await res.json();
+  saveTokens(data);
+}
+
+function saveTokens(data) {
+  store.set("access_token", data.access_token);
+  if (data.refresh_token) store.set("refresh_token", data.refresh_token);
+  const expiresAt = Date.now() + (data.expires_in - 60) * 1000;
+  store.set("expires_at", String(expiresAt));
+}
+
+async function ensureToken() {
+  const expiresAt = Number(store.get("expires_at") || 0);
+  if (Date.now() > expiresAt) {
+    await refreshAccessToken();
+  }
+  return store.get("access_token");
+}
+
+// ---------- API wrapper ----------
+async function spotifyFetch(path, options = {}) {
+  const token = await ensureToken();
+  const res = await fetch("https://api.spotify.com/v1" + path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + token,
+    },
+  });
+  if (res.status === 401) {
+    await refreshAccessToken();
+    return spotifyFetch(path, options);
+  }
+  return res;
+}
+
+// ---------- UI state ----------
+let selectedPlaylist = null;
+let selectedDeviceId = null;
+let trackPool = [];
+let usedTrackUris = new Set();
+let currentTrack = null;
+let quizCount = 0;
+let selectedDuration = 5;
+let pauseTimer = null;
+
+function showScreen(id) {
+  ["setup-screen", "playlist-screen", "device-screen", "quiz-screen"].forEach((s) => {
+    document.getElementById(s).classList.toggle("hidden", s !== id);
+  });
+}
+function showSetupError(msg) {
+  const el = document.getElementById("setup-error");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+// ---------- Playlists ----------
+async function loadPlaylists() {
+  showScreen("playlist-screen");
+  const listEl = document.getElementById("playlist-list");
+  listEl.innerHTML = "読み込み中...";
+  let items = [];
+  let url = "/me/playlists?limit=50";
+  while (url) {
+    const res = await spotifyFetch(url.replace("https://api.spotify.com/v1", ""));
+    const data = await res.json();
+    items = items.concat(data.items || []);
+    url = data.next;
+  }
+  listEl.innerHTML = "";
+  items.forEach((pl) => {
+    const div = document.createElement("div");
+    div.className = "playlist-item";
+    div.textContent = `${pl.name} (${pl.tracks.total}曲)`;
+    div.onclick = () => selectPlaylist(pl, div);
+    listEl.appendChild(div);
+  });
+}
+
+function selectPlaylist(pl, div) {
+  document.querySelectorAll(".playlist-item").forEach((el) => el.classList.remove("selected"));
+  div.classList.add("selected");
+  selectedPlaylist = pl;
+  setTimeout(loadDevices, 300);
+}
+
+// ---------- Devices ----------
+async function loadDevices() {
+  showScreen("device-screen");
+  const listEl = document.getElementById("device-list");
+  listEl.innerHTML = "読み込み中...";
+  const res = await spotifyFetch("/me/player/devices");
+  const data = await res.json();
+  listEl.innerHTML = "";
+  if (!data.devices || data.devices.length === 0) {
+    listEl.innerHTML = "デバイスが見つかりません。スマホでSpotifyアプリを開いてから「更新」を押してください。";
+    return;
+  }
+  data.devices.forEach((d) => {
+    const div = document.createElement("div");
+    div.className = "device-item" + (d.is_active ? " selected" : "");
+    div.textContent = `${d.name} (${d.type})`;
+    div.onclick = () => selectDevice(d, div);
+    listEl.appendChild(div);
+  });
+}
+
+function selectDevice(d, div) {
+  document.querySelectorAll(".device-item").forEach((el) => el.classList.remove("selected"));
+  div.classList.add("selected");
+  selectedDeviceId = d.id;
+  setTimeout(startQuiz, 300);
+}
+
+document.getElementById("refresh-devices-btn").onclick = loadDevices;
+
+// ---------- Quiz ----------
+async function startQuiz() {
+  showScreen("quiz-screen");
+  document.getElementById("quiz-status").textContent = "曲を読み込み中...";
+  trackPool = [];
+  let url = `/playlists/${selectedPlaylist.id}/tracks?limit=100&fields=items(track(uri,name,artists(name))),next`;
+  while (url) {
+    const res = await spotifyFetch(url.replace("https://api.spotify.com/v1", ""));
+    const data = await res.json();
+    (data.items || []).forEach((item) => {
+      if (item.track && item.track.uri) trackPool.push(item.track);
+    });
+    url = data.next;
+  }
+  usedTrackUris = new Set();
+  quizCount = 0;
+  updateScore();
+  document.getElementById("quiz-status").textContent = `${trackPool.length}曲を読み込みました。「出題」を押してください。`;
+}
+
+function updateScore() {
+  document.getElementById("score-display").textContent = `出題数: ${quizCount} / ${trackPool.length}`;
+}
+
+document.querySelectorAll(".duration-row button").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll(".duration-row button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedDuration = Number(btn.dataset.sec);
+  };
+});
+
+async function playClip(track) {
+  clearTimeout(pauseTimer);
+  await spotifyFetch(`/me/player/play?device_id=${selectedDeviceId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uris: [track.uri], position_ms: 0 }),
+  });
+  pauseTimer = setTimeout(async () => {
+    await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
+  }, selectedDuration * 1000);
+}
+
+document.getElementById("play-btn").onclick = async () => {
+  const remaining = trackPool.filter((t) => !usedTrackUris.has(t.uri));
+  if (remaining.length === 0) {
+    document.getElementById("quiz-status").textContent = "全曲出題し終わりました！お疲れ様でした 🎉";
+    return;
+  }
+  currentTrack = remaining[Math.floor(Math.random() * remaining.length)];
+  usedTrackUris.add(currentTrack.uri);
+  quizCount++;
+  updateScore();
+
+  document.getElementById("quiz-status").textContent = "🎧 再生中...";
+  document.getElementById("answer-title").classList.add("hidden");
+  document.getElementById("answer-artist").classList.add("hidden");
+  document.getElementById("play-btn").classList.add("hidden");
+  document.getElementById("replay-btn").classList.remove("hidden");
+  document.getElementById("reveal-btn").classList.remove("hidden");
+  document.getElementById("next-btn").classList.add("hidden");
+
+  await playClip(currentTrack);
+  document.getElementById("quiz-status").textContent = "この曲、何でしょう？🤔";
+};
+
+document.getElementById("replay-btn").onclick = async () => {
+  if (currentTrack) await playClip(currentTrack);
+};
+
+document.getElementById("reveal-btn").onclick = () => {
+  document.getElementById("answer-title").textContent = currentTrack.name;
+  document.getElementById("answer-artist").textContent = currentTrack.artists.map((a) => a.name).join(", ");
+  document.getElementById("answer-title").classList.remove("hidden");
+  document.getElementById("answer-artist").classList.remove("hidden");
+  document.getElementById("quiz-status").textContent = "正解発表 👇";
+  document.getElementById("reveal-btn").classList.add("hidden");
+  document.getElementById("replay-btn").classList.add("hidden");
+  document.getElementById("next-btn").classList.remove("hidden");
+};
+
+document.getElementById("next-btn").onclick = () => {
+  document.getElementById("play-btn").classList.remove("hidden");
+  document.getElementById("next-btn").classList.add("hidden");
+  document.getElementById("quiz-status").textContent = "「出題」を押してください";
+};
+
+// ---------- Init ----------
+document.getElementById("login-btn").onclick = startLogin;
+
+(async function init() {
+  const savedClientId = store.get("spotify_client_id");
+  if (savedClientId) document.getElementById("client-id").value = savedClientId;
+
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+
+  if (code) {
+    try {
+      await exchangeCodeForToken(code);
+      window.history.replaceState({}, document.title, REDIRECT_URI);
+      loadPlaylists();
+      return;
+    } catch (e) {
+      showSetupError(e.message);
+      showScreen("setup-screen");
+      return;
+    }
+  }
+
+  const accessToken = store.get("access_token");
+  if (accessToken) {
+    try {
+      await ensureToken();
+      loadPlaylists();
+      return;
+    } catch (e) {
+      // fall through to login screen
+    }
+  }
+  showScreen("setup-screen");
+})();
+</script>
+
+</body>
+</html>
