@@ -131,7 +131,7 @@
   <div class="score" id="score-display">出題数: 0</div>
   <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
     <input type="checkbox" id="auto-mode-toggle">
-    オートモード（答え表示後3秒で自動的に次へ）
+    オートモード（10秒再生→曲名表示→3秒後に次の曲）
   </label>
   <label>再生する長さ</label>
   <div class="duration-row">
@@ -427,22 +427,31 @@ document.querySelectorAll(".duration-row button").forEach((btn) => {
 
 async function playClip(track) {
   clearTimeout(pauseTimer);
+  clearTimeout(autoNextTimer);
   await spotifyFetch(`/me/player/play?device_id=${selectedDeviceId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uris: [track.uri], position_ms: 0 }),
   });
-  if (selectedDuration > 0) {
+  const isAuto = document.getElementById("auto-mode-toggle").checked;
+  const duration = isAuto ? 10 : selectedDuration;
+  if (duration > 0) {
     pauseTimer = setTimeout(async () => {
       await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
-    }, selectedDuration * 1000);
+      if (isAuto) revealAnswer();
+    }, duration * 1000);
   }
 }
 
 async function playNextTrack() {
   const remaining = trackPool.filter((t) => !usedTrackUris.has(t.uri));
   if (remaining.length === 0) {
-    document.getElementById("quiz-status").textContent = "全曲出題し終わりました！お疲れ様でした 🎉";
+    if (document.getElementById("auto-mode-toggle").checked) {
+      document.getElementById("quiz-status").textContent = "全曲出題し終わりました！プレイリスト選択に戻ります... 🎉";
+      autoNextTimer = setTimeout(() => loadPlaylists(), 3000);
+    } else {
+      document.getElementById("quiz-status").textContent = "全曲出題し終わりました！お疲れ様でした 🎉";
+    }
     return;
   }
   currentTrack = remaining[Math.floor(Math.random() * remaining.length)];
@@ -468,7 +477,8 @@ document.getElementById("replay-btn").onclick = async () => {
   if (currentTrack) await playClip(currentTrack);
 };
 
-document.getElementById("reveal-btn").onclick = () => {
+function revealAnswer() {
+  if (!currentTrack) return;
   document.getElementById("answer-title").textContent = currentTrack.name;
   document.getElementById("answer-artist").textContent = currentTrack.artists.map((a) => a.name).join(", ");
   document.getElementById("answer-title").classList.remove("hidden");
@@ -482,7 +492,9 @@ document.getElementById("reveal-btn").onclick = () => {
   if (document.getElementById("auto-mode-toggle").checked) {
     autoNextTimer = setTimeout(goToNextQuestion, 3000);
   }
-};
+}
+
+document.getElementById("reveal-btn").onclick = revealAnswer;
 
 async function goToNextQuestion() {
   clearTimeout(autoNextTimer);
