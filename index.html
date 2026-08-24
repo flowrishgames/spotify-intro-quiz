@@ -131,9 +131,9 @@
   <div class="score" id="score-display">出題数: 0</div>
   <label>再生する長さ</label>
   <div class="duration-row">
-    <button data-sec="3">3秒</button>
-    <button data-sec="5" class="active">5秒</button>
+    <button data-sec="3" class="active">3秒</button>
     <button data-sec="10">10秒</button>
+    <button data-sec="0">無制限</button>
   </div>
   <div class="quiz-status" id="quiz-status">「出題」を押してスタート</div>
   <div class="answer hidden" id="answer-title"></div>
@@ -280,7 +280,7 @@ let trackPool = [];
 let usedTrackUris = new Set();
 let currentTrack = null;
 let quizCount = 0;
-let selectedDuration = 5;
+let selectedDuration = 3;
 let pauseTimer = null;
 
 function showScreen(id) {
@@ -421,9 +421,11 @@ async function playClip(track) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uris: [track.uri], position_ms: 0 }),
   });
-  pauseTimer = setTimeout(async () => {
-    await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
-  }, selectedDuration * 1000);
+  if (selectedDuration > 0) {
+    pauseTimer = setTimeout(async () => {
+      await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
+    }, selectedDuration * 1000);
+  }
 }
 
 document.getElementById("play-btn").onclick = async () => {
@@ -464,7 +466,9 @@ document.getElementById("reveal-btn").onclick = () => {
   document.getElementById("next-btn").classList.remove("hidden");
 };
 
-document.getElementById("next-btn").onclick = () => {
+document.getElementById("next-btn").onclick = async () => {
+  clearTimeout(pauseTimer);
+  await spotifyFetch(`/me/player/pause?device_id=${selectedDeviceId}`, { method: "PUT" });
   document.getElementById("play-btn").classList.remove("hidden");
   document.getElementById("next-btn").classList.add("hidden");
   document.getElementById("answer-title").classList.add("hidden");
