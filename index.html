@@ -385,7 +385,7 @@ async function startQuiz() {
   showScreen("quiz-screen");
   document.getElementById("quiz-status").textContent = "曲を読み込み中...";
   trackPool = [];
-  let url = `/playlists/${selectedPlaylist.id}/tracks?limit=100&fields=items(is_local,item(uri,name,artists(name))),next`;
+  let url = `/playlists/${selectedPlaylist.id}/items?limit=100`;
   try {
     while (url) {
       const res = await spotifyFetch(url.replace("https://api.spotify.com/v1", ""));
@@ -395,7 +395,7 @@ async function startQuiz() {
       }
       const data = await res.json();
       (data.items || []).forEach((entry) => {
-        const track = entry.item || entry.track;
+        const track = entry.track || entry.item;
         if (track && track.uri && !entry.is_local) trackPool.push(track);
       });
       url = data.next;
